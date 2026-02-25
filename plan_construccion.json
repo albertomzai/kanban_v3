@@ -1,0 +1,98 @@
+{
+  "api_contract": {
+    "ruta_base": "/api/tasks",
+    "descripcion": "Gestiona las tareas del Kanban. Permite crear, leer, actualizar y eliminar tareas, así como modificar su estado.",
+    "esquema_de_datos_tarea": {
+      "id": "integer",
+      "content": "string",
+      "state": "string (Valores: 'Por Hacer', 'En Progreso', 'Hecho')"
+    },
+    "endpoints": [
+      {
+        "metodo": "GET",
+        "ruta": "/api/tasks",
+        "descripcion": "Devuelve un JSON con la lista de todas las tareas."
+      },
+      {
+        "metodo": "POST",
+        "ruta": "/api/tasks",
+        "descripcion": "Crea una nueva tarea. Espera JSON con 'content' y 'state' (por defecto 'Por Hacer').",
+        "parametros_entrada": {
+          "content": "string",
+          "state": "string (opcional)"
+        }
+      },
+      {
+        "metodo": "PUT",
+        "ruta": "/api/tasks/<id>",
+        "descripcion": "Actualiza el contenido o el estado de una tarea existente.",
+        "parametros_entrada": {
+          "content": "string (opcional)",
+          "state": "string (opcional)"
+        }
+      },
+      {
+        "metodo": "DELETE",
+        "ruta": "/api/tasks/<id>",
+        "descripcion": "Elimina permanentemente una tarea por su ID."
+      }
+    ]
+  },
+  "contrato_qa_e2e": {
+    "columna_por_hacer": "col-todo",
+    "columna_en_progreso": "col-progress",
+    "columna_hecho": "col-done",
+    "tarjeta_tarea": "task-card",
+    "input_nueva_tarea": "input-new-task",
+    "boton_agregar": "btn-add-task",
+    "boton_eliminar": "btn-delete-task",
+    "texto_tarea": "task-text"
+  },
+  "plan": [
+    {
+      "etapa": "backend",
+      "tareas": [
+        "Inicializar un proyecto Flask con una estructura de paquetes estándar.",
+        "Crear el fichero `requirements.txt` e incluir las dependencias 'Flask' y 'pytest'.",
+        "Crear el fichero `pytest.ini` en la raíz para configurar el path de Python.",
+        "Crear el paquete `backend/` con un fichero `__init__.py` que implemente la 'application factory' `create_app`.",
+        "Configurar la aplicación Flask en `backend/__init__.py` para servir archivos estáticos desde el directorio '../frontend'.",
+        "Dentro del paquete `backend/`, crear un módulo `routes.py` y definir un Blueprint para las rutas de la API.",
+        "Implementar en `backend/routes.py` la lógica de lectura y escritura en el archivo 'tasks.json' para la persistencia de datos.",
+        "Implementar el endpoint GET /api/tasks en `backend/routes.py` que lea 'tasks.json' y devuelva la lista.",
+        "Implementar el endpoint POST /api/tasks en `backend/routes.py` para añadir una nueva tarea al archivo 'tasks.json'.",
+        "Implementar el endpoint PUT /api/tasks/<id> en `backend/routes.py` para actualizar campos de una tarea existente.",
+        "Implementar el endpoint DELETE /api/tasks/<id> en `backend/routes.py` para remover una tarea del archivo 'tasks.json'.",
+        "Crear el fichero `app.py` en la raíz del proyecto que importe y ejecute la aplicación Flask creada.",
+        "Crear la carpeta `tests/` y dentro el fichero `test_backend.py` con pruebas unitarias para cada endpoint de la API usando pytest."
+      ]
+    },
+    {
+      "etapa": "frontend",
+      "tareas": [
+        "Crear el archivo `frontend/index.html` con la estructura semántica principal (header, main, board).",
+        "En `index.html`, implementar el contenedor del tablero con tres secciones div para las columnas: 'Por Hacer', 'En Progreso' y 'Hecho'.",
+        "Añadir en la columna 'Por Hacer' un formulario con un input de texto y un botón para crear tareas.",
+        "Escribir CSS en `index.html` (dentro de <style>) utilizando Flexbox o Grid para distribuir las columnas y dar estilo a las tarjetas.",
+        "Implementar en `index.html` un script JavaScript que realice una petición GET inicial a /api/tasks para cargar el tablero.",
+        "Crear una función JavaScript en `index.html` que genere dinámicamente elementos DOM (tarjetas) basados en los datos recibidos.",
+        "Implementar en `index.html` la lógica de Drag and Drop usando la API HTML5 (eventos dragstart, dragover, drop) en las tarjetas y columnas.",
+        "Configurar el evento 'drop' en JavaScript para capturar el ID de la tarea movida y realizar una petición PUT a /api/tasks/<id> actualizando el estado.",
+        "Implementar la funcionalidad de edición: permitir hacer clic en el texto de la tarjeta para editar y guardar los cambios mediante una petición PUT.",
+        "Añadir un botón de eliminar en cada tarjeta que, al ser pulsado, realice una petición DELETE a /api/tasks/<id> y elimine el elemento del DOM."
+      ]
+    },
+    {
+      "etapa": "e2e",
+      "tareas": [
+        "Crear el fichero de prueba `cypress/e2e/kanban.cy.js`.",
+        "Escribir un test en Cypress que visite la aplicación y verifique que las tres columnas están presentes.",
+        "Escribir un test que simule la creación de una nueva tarea llenando el input y haciendo clic en el botón de agregar.",
+        "Escribir un test que verifique que la tarea creada aparece en la columna correcta.",
+        "Escribir un test que simule el arrastre de una tarjeta desde 'Por Hacer' hasta 'En Progreso'.",
+        "Escribir un test que verifique mediante una llamada a la API o inspección del DOM que el estado de la tarea se actualizó correctamente tras el arrastre.",
+        "Escribir un test que simule la eliminación de una tarea y verifique que ya no se muestra en la interfaz."
+      ]
+    }
+  ]
+}
