@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Kanban</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .kanban-board {
+            margin-top: 2rem;
+        }
+        
+        .kanban-column {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            min-height: 500px;
+            padding: 1rem;
+            transition: background-color 0.2s;
+        }
+        
+        .kanban-column.drag-over {
+            background-color: #e9ecef;
+            border: 2px dashed #0d6efd;
+        }
+        
+        .kanban-card {
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+        
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .kanban-card:active {
+            cursor: grabbing;
+        }
+        
+        .kanban-card.dragging {
+            opacity: 0.5;
+        }
+        
+        .card-text {
+            cursor: pointer;
+        }
+        
+        .card-text:hover {
+            color: #0d6efd;
+            text-decoration: underline;
+        }
+        
+        .btn-delete {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <header class="bg-primary text-white py-3 mb-4 shadow-sm">
+        <div class="container d-flex justify-content-between align-items-center">
+            <h1 class="h3 mb-0">Tablero Kanban</h1>
+            <span class="badge bg-white text-primary">Gestión de Tareas</span>
+        </div>
+    </header>
+    
+    <div class="container kanban-board">
+        <!-- Alertas -->
+        <div id="alert-container" class="mb-3"></div>
+        
+        <div class="row g-4">
+            <!-- Columna: Por Hacer -->
+            <div class="col-md-4">
+                <div class="kanban-column" id="col-por-hacer" data-estado="Por Hacer">
+                    <h5 class="text-center text-muted mb-3 border-bottom pb-2">Por Hacer</h5>
+                    
+                    <!-- Formulario para añadir tarea -->
+                    <div class="mb-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="input-tarea" placeholder="Nueva tarea..." aria-label="Nueva tarea">
+                            <button class="btn btn-primary" id="btn-crear-tarea">Añadir</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Contenedor de tareas -->
+                    <div id="lista-por-hacer" class="task-list">
+                        <!-- Las tareas se insertarán aquí -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Columna: En Progreso -->
+            <div class="col-md-4">
+                <div class="kanban-column" id="col-en-progreso" data-estado="En Progreso">
+                    <h5 class="text-center text-muted mb-3 border-bottom pb-2">En Progreso</h5>
+                    <div id="lista-en-progreso" class="task-list">
+                        <!-- Las tareas se insertarán aquí -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Columna: Hecho -->
+            <div class="col-md-4">
+                <div class="kanban-column" id="col-hecho" data-estado="Hecho">
+                    <h5 class="text-center text-muted mb-3 border-bottom pb-2">Hecho</h5>
+                    <div id="lista-hecho" class="task-list">
+                        <!-- Las tareas se insertarán aquí -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const API_URL = '/api/tasks';
+        const columnas = {
+            'Por Hacer': document.getElementById('lista-por-hacer'),
+            'En Progreso': document.getElementById('lista-en-progreso'),
+            'Hecho': document.getElementById('lista-hecho')
+        };
+        const contenedor_columnas = document.querySelectorAll('.kanban-column');
+        
+        /**
+         * Muestra una alerta en la interfaz
+         * @param {string} mensaje - El mensaje a mostrar
+         * @param {string} tipo - 'success' o 'danger'
+         */
+        function mostrar_alerta(mensaje, tipo = 'success') {
+            const contenedor = document.getElementById('alert-container');
+            const alerta = document.createElement('div');
+            alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
+            alerta.role = 'alert';
+            alerta.innerHTML = `${mensaje}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+            contenedor.appendChild(alerta);
+            
+            setTimeout(() => {
+                alerta.classList.remove('show');
+                setTimeout(() => alerta.remove(), 150);
+            }, 3000);
+        }
+        
+        /**
+         * Carga todas las tareas desde el servidor
+         */
+        async function cargar_tareas() {
+            try {
+                const respuesta = await fetch(API_URL);
+                if (!respuesta.ok) throw new Error('Error al cargar tareas');
+                const tareas = await respuesta.json();
+                renderizar_tablero(tareas);
+            } catch (error) {
+                console.error(error);
+                mostrar_alerta('Error al conectar con el servidor.', 'danger');
+            }
+        }
+        
+        /**
+         * Renderiza las tarjetas en sus columnas correspondientes
+         * @param {Array} tareas - Lista de objetos tarea
+         */
+        function renderizar_tablero(tareas) {
+            // Limpiar columnas
+            Object.values(columnas).forEach(col => col.innerHTML = '');
+            
+            tareas.forEach(tarea => {
+                const tarjeta = crear_elemento_tarjeta(tarea);
+                if (columnas[tarea.state]) {
+                    columnas[tarea.state].appendChild(tarjeta);
+                }
+            });
+        }
+        
+        /**
+         * Crea el elemento DOM para una tarea
+         * @param {Object} tarea - Objeto de tarea con id, content, state
+         * @returns {HTMLElement}
+         */
+        function crear_elemento_tarjeta(tarea) {
+            const div = document.createElement('div');
+            div.className = 'kanban-card';
+            div.draggable = true;
+            div.dataset.id = tarea.id;
+            
+            // Texto de la tarea
+            const p = document.createElement('p');
+            p.className = 'card-text mb-0 me-3';
+            p.textContent = tarea.content;
+            p.title = 'Clic para editar';
+            p.onclick = () => editar_tarea(tarea.id, tarea.content);
+            
+            // Botón de eliminar
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm btn-danger btn-delete';
+            btn.innerHTML = '&times;';
+            btn.title = 'Eliminar tarea';
+            btn.onclick = (e) => {
+                e.stopPropagation(); // Evitar editar al borrar
+                eliminar_tarea(tarea.id);
+            };
+            
+            div.appendChild(p);
+            div.appendChild(btn);
+            
+            // Eventos Drag and Drop
+            div.addEventListener('dragstart', manejar_drag_start);
+            div.addEventListener('dragend', manejar_drag_end);
+            
+            return div;
+        }
+        
+        /**
+         * Crea una nueva tarea
+         */
+        async function crear_tarea() {
+            const input = document.getElementById('input-tarea');
+            const contenido = input.value.trim();
+            
+            if (!contenido) {
+                mostrar_alerta('El contenido no puede estar vacío.', 'danger');
+                return;
+            }
+            
+            try {
+                const respuesta = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: contenido, state: 'Por Hacer' })
+                });
+                
+                if (!respuesta.ok) throw new Error('Error al crear tarea');
+                
+                input.value = '';
+                await cargar_tareas();
+                mostrar_alerta('Tarea creada exitosamente.');
+            } catch (error) {
+                console.error(error);
+                mostrar_alerta('Error al crear la tarea.', 'danger');
+            }
+        }
+        
+        /**
+         * Elimina una tarea por ID
+         * @param {number} id
+         */
+        async function eliminar_tarea(id) {
+            if (!confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
+            
+            try {
+                const respuesta = await fetch(`${API_URL}/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!respuesta.ok) throw new Error('Error al eliminar tarea');
+                
+                await cargar_tareas();
+                mostrar_alerta('Tarea eliminada.');
+            } catch (error) {
+                console.error(error);
+                mostrar_alerta('Error al eliminar la tarea.', 'danger');
+            }
+        }
+        
+        /**
+         * Edita el contenido de una tarea
+         * @param {number} id
+         * @param {string} contenido_actual
+         */
+        async function editar_tarea(id, contenido_actual) {
+            const nuevo_contenido = prompt('Editar tarea:', contenido_actual);
+            
+            if (nuevo_contenido === null || nuevo_contenido.trim() === '') return;
+            if (nuevo_contenido === contenido_actual) return;
+            
+            try {
+                const respuesta = await fetch(`${API_URL}/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: nuevo_contenido })
+                });
+                
+                if (!respuesta.ok) throw new Error('Error al actualizar tarea');
+                
+                await cargar_tareas();
+                mostrar_alerta('Tarea actualizada.');
+            } catch (error) {
+                console.error(error);
+                mostrar_alerta('Error al actualizar la tarea.', 'danger');
+            }
+        }
+        
+        /**
+         * Actualiza el estado de una tarea (Drag and Drop)
+         * @param {number} id
+         * @param {string} nuevo_estado
+         */
+        async function actualizar_estado_tarea(id, nuevo_estado) {
+            try {
+                const respuesta = await fetch(`${API_URL}/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ state: nuevo_estado })
+                });
+                
+                if (!respuesta.ok) throw new Error('Error al mover tarea');
+                
+                // Esperamos a que el servidor confirme antes de recargar para evitar parpadeos o inconsistencias
+                await cargar_tareas();
+            } catch (error) {
+                console.error(error);
+                mostrar_alerta('Error al mover la tarea.', 'danger');
+                cargar_tareas(); // Recargar para reestablecer estado visual
+            }
+        }
+        
+        /* --- Manejadores de Eventos Drag & Drop --- */
+        let tarea_arrastrada_id = null;
+        
+        function manejar_drag_start(e) {
+            tarea_arrastrada_id = this.dataset.id;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.dataset.id);
+        }
+        
+        function manejar_drag_end(e) {
+            this.classList.remove('dragging');
+            contenedor_columnas.forEach(col => col.classList.remove('drag-over'));
+            tarea_arrastrada_id = null;
+        }
+        
+        contenedor_columnas.forEach(columna => {
+            columna.addEventListener('dragover', (e) => {
+                e.preventDefault(); // Necesario para permitir drop
+                e.dataTransfer.dropEffect = 'move';
+                columna.classList.add('drag-over');
+            });
+            
+            columna.addEventListener('dragleave', (e) => {
+                columna.classList.remove('drag-over');
+            });
+            
+            columna.addEventListener('drop', (e) => {
+                e.preventDefault();
+                columna.classList.remove('drag-over');
+                const nuevo_estado = columna.dataset.estado;
+                if (tarea_arrastrada_id && nuevo_estado) {
+                    actualizar_estado_tarea(tarea_arrastrada_id, nuevo_estado);
+                }
+            });
+        });
+        
+        /* --- Inicialización --- */
+        document.getElementById('btn-crear-tarea').addEventListener('click', crear_tarea);
+        document.getElementById('input-tarea').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') crear_tarea();
+        });
+        
+        // Cargar tareas al inicio
+        document.addEventListener('DOMContentLoaded', cargar_tareas);
+    </script>
+</body>
+</html>
