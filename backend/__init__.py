@@ -1,22 +1,21 @@
 from flask import Flask, send_from_directory
-from .routes import api_bp
-
+from . import routes
 
 def create_app():
     """
-    Application factory para la aplicación Flask.
-    Configura la app y registra los blueprints.
+    Application factory para crear y configurar la instancia de la aplicación Flask.
+    Configura la carpeta estática para servir el frontend y registra los Blueprints.
     """
-    # Configuramos la carpeta estática para servir el frontend
+    # Configurar la aplicación para servir archivos estáticos desde el directorio '../frontend'
     app = Flask(__name__, static_folder='../frontend', static_url_path='')
-    
-    # Registramos el Blueprint de la API
-    app.register_blueprint(api_bp)
+
+    # Registrar el Blueprint de la API
+    app.register_blueprint(routes.api_bp)
 
     @app.route('/')
     def index():
         """
-        Ruta raíz que sirve el fichero index.html del frontend.
+        Ruta raíz que sirve el archivo index.html de la aplicación frontend.
         """
         return send_from_directory(app.static_folder, 'index.html')
 

@@ -1,105 +1,114 @@
 import json
 import os
-from flask import Blueprint, request, jsonify, current_app
+from pathlib import Path
+from flask import Blueprint, request, jsonify
 
-# Definición del Blueprint para la API
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+# Definir el Blueprint para las rutas de la API
+api_bp = Blueprint('api', __name__)
 
-# Ruta del archivo de persistencia
-TASKS_FILE = 'tasks.json'
+# Definir la ruta del archivo de persistencia de datos.
+# Se ubica en la raíz del proyecto (../ desde backend/)
+DATA_FILE = Path(__file__).parent.parent / 'tasks.json'
 
 
 def _leer_tareas():
     """
     Lee la lista de tareas desde el archivo JSON.
-    Si el archivo no existe o está vacío, devuelve una lista vacía.
+    Retorna una lista vacía si el archivo no existe o hay un error de lectura.
     """
     try:
-        if os.path.exists(TASKS_FILE):
-            with open(TASKS_FILE, 'r') as f:
-                return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
-    return []
+        if not DATA_FILE.exists():
+            return []
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, IOError):
+        return []
 
 
 def _guardar_tareas(tareas):
     """
     Escribe la lista de tareas en el archivo JSON.
     """
-    with open(TASKS_FILE, 'w') as f:
-        json.dump(tareas, f, indent=4)
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump(tareas, f, indent=4, ensure_ascii=False)
+    except IOError as e:
+        # En un caso real, aquí se loguearía el error
+        print(f"Error guardando tareas: {e}")
 
 
-@api_bp.route('/tasks', methods=['GET'])
+@api_bp.route('/api/tasks', methods=['GET'])
 def get_tasks():
     """
-    Endpoint para obtener todas las tareas.
+    Endpoint GET: Devuelve todas las tareas existentes.
     """
     tareas = _leer_tareas()
     return jsonify(tareas)
 
 
-@api_bp.route('/tasks', methods=['POST'])
+@api_bp.route('/api/tasks', methods=['POST'])
 def create_task():
     """
-    Endpoint para crear una nueva tarea.
+    Endpoint POST: Crea una nueva tarea.
     Espera un JSON con 'content' y opcionalmente 'state'.
     """
     data = request.get_json()
-    contenido = data.get('content', '')
-    estado = data.get('state', 'Por Hacer')
-
-    if not contenido:
-        return jsonify({'error': 'El contenido es obligatorio'}), 400
+    if not data or 'content' not in data:
+        return jsonify({'error': 'El campo "content" es obligatorio'}), 400
 
     tareas = _leer_tareas()
-    # Generar un ID simple (max ID + 1)
-    max_id = 0
-    if tareas:
-        max_id = max(t.get('id', 0) for t in tareas)
+    # Generar un ID simple basado en la longitud actual (no seguro para concurrencia, pero válido para el ejemplo)
+    nuevo_id = max([t.get('id', 0) for t in tareas], default=0) + 1
+
     nueva_tarea = {
-        'id': max_id + 1,
-        'content': contenido,
-        'state': estado
+        'id': nuevo_id,
+        'content': data['content'],
+        'state': data.get('state', 'Por Hacer')
     }
+
     tareas.append(nueva_tarea)
     _guardar_tareas(tareas)
 
     return jsonify(nueva_tarea), 201
 
 
-@api_bp.route('/tasks/<int:id>', methods=['PUT'])
+@api_bp.route('/api/tasks/<int:id>', methods=['PUT'])
 def update_task(id):
     """
-    Endpoint para actualizar una tarea existente.
-    Permite modificar 'content' y 'state'.
+    Endpoint PUT: Actualiza una tarea existente.
+    Permite modificar 'content' y/o 'state'.
     """
     tareas = _leer_tareas()
-    data = request.get_json()
+    tarea_encontrada = None
 
     for tarea in tareas:
         if tarea['id'] == id:
-            if 'content' in data:
-                tarea['content'] = data['content']
-            if 'state' in data:
-                tarea['state'] = data['state']
-            _guardar_tareas(tareas)
-            return jsonify(tarea)
+            tarea_encontrada = tarea
+            break
 
-    return jsonify({'error': 'Tarea no encontrada'}), 404
-
-
-@api_bp.route('/tasks/<int:id>', methods=['DELETE'])
-def delete_task(id):
-    """
-    Endpoint para eliminar una tarea.
-    """
-    tareas = _leer_tareas()
-    nuevas_tareas = [t for t in tareas if t['id'] != id]
-
-    if len(tareas) == len(nuevas_tareas):
+    if not tarea_encontrada:
         return jsonify({'error': 'Tarea no encontrada'}), 404
 
-    _guardar_tareas(nuevas_tareas)
+    data = request.get_json()
+    if 'content' in data:
+        tarea_encontrada['content'] = data['content']
+    if 'state' in data:
+        tarea_encontrada['state'] = data['state']
+
+    _guardar_tareas(tareas)
+    return jsonify(tarea_encontrada)
+
+
+@api_bp.route('/api/tasks/<int:id>', methods=['DELETE'])
+def delete_task(id):
+    """
+    Endpoint DELETE: Elimina una tarea existente.
+    """
+    tareas = _leer_tareas()
+    tareas_filtradas = [t for t in tareas if t['id'] != id]
+
+    if len(tareas) == len(tareas_filtradas):
+        return jsonify({'error': 'Tarea no encontrada'}), 404
+
+    _guardar_tareas(tareas_filtradas)
     return '', 204
